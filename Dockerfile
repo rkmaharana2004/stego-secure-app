@@ -2,20 +2,24 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# We are removing apt-get entirely to avoid deployment errors.
-# Modern Python wheels for Pillow/Numpy/Scipy usually include all necessary dependencies.
+# Install only basic system dependencies
+RUN apt-get update && apt-get install -y \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Create necessary directories
+# Create necessary directories inside backend
 RUN mkdir -p backend/uploads backend/gallery
 
-EXPOSE 8000
+# Change working directory to backend so app.py can find evaluator.py etc.
+WORKDIR /app/backend
 
+EXPOSE 8000
 ENV PORT=8000
 
 # Start the application from the backend directory
-CMD ["python", "backend/app.py"]
+CMD ["python", "app.py"]
