@@ -1,9 +1,10 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 import numpy as np
 from PIL import Image
-import io, uuid, hashlib, hmac, struct
+import io, uuid, hashlib, hmac, struct, os
 from pathlib import Path
 import uvicorn
 from scipy.ndimage import convolve
@@ -15,10 +16,16 @@ from existing_models import (
 
 app = FastAPI(title="Adaptive Pixel Steganography with Edge Preservation for Secure Image Communication")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
-Path("uploads").mkdir(exist_ok=True)
-Path("gallery").mkdir(exist_ok=True)
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
-app.mount("/gallery", StaticFiles(directory="gallery"), name="gallery")
+
+# Ensure directories exist relative to this file's location
+BASE_DIR = Path(__file__).resolve().parent
+UPLOAD_DIR = BASE_DIR / "uploads"
+GALLERY_DIR = BASE_DIR / "gallery"
+UPLOAD_DIR.mkdir(exist_ok=True)
+GALLERY_DIR.mkdir(exist_ok=True)
+
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+app.mount("/gallery", StaticFiles(directory=str(GALLERY_DIR)), name="gallery")
 
 MAGIC, HEADER_SIZE, THRESHOLD = 0x53544547, 72, 50
 BLUR = np.array([[1,2,1],[2,4,2],[1,2,1]], dtype=np.float32) / 16
@@ -87,6 +94,10 @@ class StegoSystem:
 
 stego_sys = StegoSystem()
 
+@app.get("/")
+async def read_index():
+    return FileResponse(BASE_DIR.parent / "frontend" / "index.html")
+
 @app.post("/api/hide")
 async def hide(image: UploadFile = File(...), password: str = Form(...), message: str = Form(...)):
     try:
@@ -96,7 +107,6 @@ async def hide(image: UploadFile = File(...), password: str = Form(...), message
         our_stego = stego_sys.embed(arr, payload_bytes, password)
         our_metrics = StegoEvaluator.calculate_all_metrics(arr, our_stego, payload_bytes)
 
-        # Only the 3 worst models (MSB, DCT, DWT)
         models = {
             "MSB (Most Significant Bit)": MSBModel,
             "DCT (JSteg)": DCTJStegModel,
@@ -124,13 +134,13 @@ async def hide(image: UploadFile = File(...), password: str = Form(...), message
         for entry in leaderboard:
             if entry.get("stego_arr") is not None:
                 fname = f"gallery_{entry['name'].replace(' ', '_').replace('(', '').replace(')', '')}_{uuid.uuid4().hex[:6]}.png"
-                img_path = f"gallery/{fname}"
+                img_path = GALLERY_DIR / fname
                 Image.fromarray(entry["stego_arr"]).save(img_path)
                 entry["stego_url"] = f"/gallery/{fname}"
                 gallery_urls.append({"name": entry["name"], "url": entry["stego_url"]})
 
         stego_filename = f"stego_{uuid.uuid4().hex[:8]}.png"
-        Image.fromarray(our_stego).save(f"uploads/{stego_filename}")
+        Image.fromarray(our_stego).save(UPLOAD_DIR / stego_filename)
 
         ranking = AlgorithmRanker.rank_algorithms(leaderboard)
         best_algo, recommendation = AlgorithmRanker.get_best_algorithm(leaderboard)
@@ -161,4 +171,5 @@ async def reveal(image: UploadFile = File(...), password: str = Form(...)):
         raise HTTPException(400, str(e))
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8002)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
