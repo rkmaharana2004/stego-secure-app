@@ -2,11 +2,8 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Only install basic system dependencies if absolutely necessary.
-# Pillow and Scikit-Image usually work fine on slim images.
-RUN apt-get update && apt-get install -y \
-    libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
+# We are removing apt-get entirely to avoid deployment errors.
+# Modern Python wheels for Pillow/Numpy/Scipy usually include all necessary dependencies.
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
