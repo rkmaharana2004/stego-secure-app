@@ -2,10 +2,10 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install system dependencies for image processing
+# Only install basic system dependencies if absolutely necessary.
+# Pillow and Scikit-Image usually work fine on slim images.
 RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -18,7 +18,6 @@ RUN mkdir -p backend/uploads backend/gallery
 
 EXPOSE 8000
 
-# Set environment variable for the port (default to 8000)
 ENV PORT=8000
 
 # Start the application from the backend directory
