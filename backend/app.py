@@ -184,8 +184,13 @@ async def reveal(image: UploadFile = File(...), password: str = Form(...)):
     try:
         img = Image.open(io.BytesIO(await image.read())).convert("RGB")
         payload = stego_sys.extract(np.array(img), password)
-        return {"success": True, "message": payload.decode()}
+        try:
+            return {"success": True, "message": payload.decode('utf-8')}
+        except UnicodeDecodeError:
+            # Fallback for binary data or incorrect password resulting in garbage
+            return {"success": True, "message": f"[Binary Data]: {payload.hex()[:100]}..."}
     except Exception as e:
+        print(f"Reveal error: {e}")
         raise HTTPException(400, str(e))
 
 if __name__ == "__main__":
