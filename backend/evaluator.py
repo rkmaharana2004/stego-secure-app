@@ -7,7 +7,7 @@ import warnings
 class StegoEvaluator:
     @staticmethod
     def calculate_mse(original, stego):
-        diff = original.astype(np.float64) - stego.astype(np.float64)
+        diff = original.astype(np.float32) - stego.astype(np.float32)
         return np.mean(diff ** 2)
 
     @staticmethod
@@ -20,8 +20,8 @@ class StegoEvaluator:
 
     @staticmethod
     def calculate_snr(original, stego):
-        orig = original.astype(np.float64)
-        steg = stego.astype(np.float64)
+        orig = original.astype(np.float32)
+        steg = stego.astype(np.float32)
         signal_power = np.sum(orig ** 2)
         noise_power = np.sum((orig - steg) ** 2)
         if noise_power == 0:
@@ -74,8 +74,8 @@ class StegoEvaluator:
         h, w, c = original.shape
         total_diff = 0.0
         for ch in range(c):
-            orig_ch = original[:,:,ch].astype(np.float64)
-            stego_ch = stego[:,:,ch].astype(np.float64)
+            orig_ch = original[:,:,ch].astype(np.float32)
+            stego_ch = stego[:,:,ch].astype(np.float32)
             dct_orig = dct2d(orig_ch)
             dct_stego = dct2d(stego_ch)
             diff = np.mean((dct_orig - dct_stego) ** 2)

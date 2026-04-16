@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import numpy as np
 from PIL import Image
-import io, uuid, hashlib, hmac, struct, os
+import io, uuid, hashlib, hmac, struct, os, gc
 from pathlib import Path
 import uvicorn
 from scipy.ndimage import convolve
@@ -104,8 +104,25 @@ async def hide(image: UploadFile = File(...), password: str = Form(...), message
         cover = Image.open(io.BytesIO(await image.read())).convert("RGB")
         arr = np.array(cover)
         payload_bytes = message.encode()
+        
+        # 1. Process Our Model
         our_stego = stego_sys.embed(arr, payload_bytes, password)
         our_metrics = StegoEvaluator.calculate_all_metrics(arr, our_stego, payload_bytes)
+        
+        # Save our stego image immediately
+        stego_filename = f"stego_{uuid.uuid4().hex[:8]}.png"
+        Image.fromarray(our_stego).save(UPLOAD_DIR / stego_filename)
+        
+        # Gallery entry for our model
+        our_gallery_fname = f"gallery_KRISHNA_{uuid.uuid4().hex[:6]}.png"
+        Image.fromarray(our_stego).save(GALLERY_DIR / our_gallery_fname)
+        
+        leaderboard = [{"name": "KRISHNA (Prime‑Seq)", **our_metrics, "is_ours": True, "stego_url": f"/gallery/{our_gallery_fname}"}]
+        gallery_urls = [{"name": "KRISHNA (Prime‑Seq)", "url": f"/gallery/{our_gallery_fname}"}]
+        
+        # Clear our stego from RAM (keep only cover 'arr' for comparisons)
+        del our_stego
+        gc.collect()
 
         models = {
             "MSB (Most Significant Bit)": MSBModel,
@@ -113,40 +130,37 @@ async def hide(image: UploadFile = File(...), password: str = Form(...), message
             "DWT (Haar)": DWTHaarModel,
         }
 
-        leaderboard = [{"name": "KRISHNA (Prime‑Seq)", **our_metrics, "is_ours": True, "stego_arr": our_stego}]
         for name, ModelClass in models.items():
             try:
+                # Process each model one by one and clear memory immediately
                 stego_arr = ModelClass.embed(arr, payload_bytes)
                 extracted = ModelClass.extract(stego_arr, len(payload_bytes))
                 metrics = StegoEvaluator.calculate_all_metrics(arr, stego_arr, payload_bytes, extracted)
-                metrics["name"] = name
-                metrics["is_ours"] = False
-                metrics["stego_arr"] = stego_arr
+                
+                # Save to gallery immediately
+                fname = f"gallery_{name.replace(' ', '_').replace('(', '').replace(')', '')}_{uuid.uuid4().hex[:6]}.png"
+                Image.fromarray(stego_arr).save(GALLERY_DIR / fname)
+                
+                metrics.update({
+                    "name": name,
+                    "is_ours": False,
+                    "stego_url": f"/gallery/{fname}"
+                })
                 leaderboard.append(metrics)
+                gallery_urls.append({"name": name, "url": f"/gallery/{fname}"})
+                
+                # CRITICAL: Delete array and collect garbage
+                del stego_arr
+                gc.collect()
             except Exception as e:
                 print(f"{name} failed: {e}")
-                leaderboard.append({"name": name, "is_ours": False, "psnr": 0, "ssim": 0, "snr": 0, "mse": 999, "capacity_bpp": 0, "fdm": 999, "epi": 0, "entropy_original": 0, "entropy_stego": 0, "sei": 0, "stego_arr": None})
+                leaderboard.append({"name": name, "is_ours": False, "psnr": 0, "ssim": 0, "snr": 0, "mse": 999, "capacity_bpp": 0, "fdm": 999, "epi": 0, "entropy_original": 0, "entropy_stego": 0, "sei": 0})
 
         leaderboard.sort(key=lambda x: x.get("sei", 0), reverse=True)
         for i, entry in enumerate(leaderboard, 1): entry["rank"] = i
 
-        gallery_urls = []
-        for entry in leaderboard:
-            if entry.get("stego_arr") is not None:
-                fname = f"gallery_{entry['name'].replace(' ', '_').replace('(', '').replace(')', '')}_{uuid.uuid4().hex[:6]}.png"
-                img_path = GALLERY_DIR / fname
-                Image.fromarray(entry["stego_arr"]).save(img_path)
-                entry["stego_url"] = f"/gallery/{fname}"
-                gallery_urls.append({"name": entry["name"], "url": entry["stego_url"]})
-
-        stego_filename = f"stego_{uuid.uuid4().hex[:8]}.png"
-        Image.fromarray(our_stego).save(UPLOAD_DIR / stego_filename)
-
         ranking = AlgorithmRanker.rank_algorithms(leaderboard)
         best_algo, recommendation = AlgorithmRanker.get_best_algorithm(leaderboard)
-
-        for entry in leaderboard:
-            entry.pop("stego_arr", None)
 
         return {
             "success": True,
@@ -160,6 +174,10 @@ async def hide(image: UploadFile = File(...), password: str = Form(...), message
         }
     except Exception as e:
         raise HTTPException(400, str(e))
+    finally:
+        # Final cleanup
+        if 'arr' in locals(): del arr
+        gc.collect()
 
 @app.post("/api/reveal")
 async def reveal(image: UploadFile = File(...), password: str = Form(...)):
