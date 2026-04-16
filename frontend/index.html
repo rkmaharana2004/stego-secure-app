@@ -374,6 +374,10 @@
         fd.append('password', password);
         try {
             const res = await fetch(`${API_BASE}/api/hide`, { method: 'POST', body: fd });
+            if (!res.ok) {
+                const text = await res.text();
+                throw new Error(`Server Error (${res.status}): ${text.slice(0, 100)}`);
+            }
             const data = await res.json();
             if (!data.success) throw new Error(data.detail || 'Embedding failed');
             
@@ -424,6 +428,10 @@
         fd.append('password', key);
         try {
             const res = await fetch(`${API_BASE}/api/reveal`, { method: 'POST', body: fd });
+            if (!res.ok) {
+                const text = await res.text();
+                throw new Error(`Server Error (${res.status}): ${text.slice(0, 100)}`);
+            }
             const data = await res.json();
             if (!data.success) throw new Error(data.detail);
             revealBox.classList.remove('hidden');
