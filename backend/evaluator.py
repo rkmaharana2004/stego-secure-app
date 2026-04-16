@@ -99,14 +99,14 @@ class StegoEvaluator:
         sei_percent = round(sei * 100, 2)
 
         return {
-            "psnr": round(psnr_val, 2),
-            "ssim": round(ssim_val, 4),
-            "snr": round(snr_val, 2),
-            "mse": round(mse_val, 6),
-            "capacity_bpp": round(capacity_bpp, 6),
-            "fdm": round(fdm_val, 8),
-            "epi": round(epi_val, 4),
-            "entropy_original": round(entropy_orig, 4),
-            "entropy_stego": round(entropy_stego, 4),
-            "sei": sei_percent
+            "psnr": float(round(psnr_val, 2)),
+            "ssim": float(round(ssim_val, 4)),
+            "snr": float(round(snr_val, 2)),
+            "mse": float(round(mse_val, 6)),
+            "capacity_bpp": float(round(capacity_bpp, 6)),
+            "fdm": float(round(fdm_val, 8)),
+            "epi": float(round(epi_val, 4)),
+            "entropy_original": float(round(entropy_orig, 4)),
+            "entropy_stego": float(round(entropy_stego, 4)),
+            "sei": float(sei_percent)
         }
