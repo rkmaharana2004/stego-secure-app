@@ -15,7 +15,13 @@ from existing_models import (
 )
 
 app = FastAPI(title="Adaptive Pixel Steganography with Edge Preservation for Secure Image Communication")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Ensure directories exist relative to this file's location
 BASE_DIR = Path(__file__).resolve().parent
@@ -43,15 +49,16 @@ class StegoSystem:
         seed = int.from_bytes(hashlib.sha256(password.encode()).digest()[:4], "big")
         rng = np.random.RandomState(seed)
         p = list(range(n))
-        for i in range(n-1,0,-1):
-            j = rng.randint(0,i+1); p[i], p[j] = p[j], p[i]
+        for i in range(n-1,0, -1):
+            j = rng.randint(0, i+1)
+            p[i], p[j] = p[j], p[i]
         return p
 
     def embed(self, img, payload_bytes, password):
         edges = np.argwhere(self._edge_mask(img))
         if len(edges) == 0:
-            h,w,_ = img.shape
-            edges = np.array([(i,j) for i in range(h) for j in range(w)])
+            h, w, _ = img.shape
+            edges = np.array([(i, j) for i in range(h) for j in range(w)])
         header = struct.pack(">II", MAGIC, len(payload_bytes)) + \
                  hashlib.sha256(payload_bytes).digest() + \
                  hmac.new(hashlib.sha256(password.encode()).digest(), 
@@ -59,7 +66,7 @@ class StegoSystem:
                           hashlib.sha256).digest()
         bits = []
         for b in (header + payload_bytes):
-            bits.extend((b>>i)&1 for i in range(7,-1,-1))
+            bits.extend((b >> i) & 1 for i in range(7, -1, -1))
         if len(bits) > len(edges) * 3:
             raise ValueError("Data exceeds capacity")
         perm = self._permute(password, len(edges))
@@ -67,10 +74,10 @@ class StegoSystem:
         k = 0
         for idx in perm:
             if k >= len(bits): break
-            i,j = edges[idx]
+            i, j = edges[idx]
             for c in range(3):
                 if k >= len(bits): break
-                stego[i,j,c] = (stego[i,j,c] & 0xFE) | bits[k]
+                stego[i, j, c] = (stego[i, j, c] & 0xFE) | bits[k]
                 k += 1
         return stego
 
@@ -79,22 +86,26 @@ class StegoSystem:
         perm = self._permute(password, len(edges))
         bits = []
         for idx in perm:
-            i,j = edges[idx]
-            for c in range(3): bits.append(img[i,j,c] & 1)
+            i, j = edges[idx]
+            for c in range(3):
+                bits.append(img[i, j, c] & 1)
         data = []
         for i in range(0, len(bits), 8):
-            if i+8 > len(bits): break
+            if i + 8 > len(bits): break
             b = 0
-            for j in range(8): b = (b<<1) | bits[i+j]
+            for j in range(8):
+                b = (b << 1) | bits[i + j]
             data.append(b)
         data = bytes(data)
         magic, length = struct.unpack(">II", data[:8])
-        if magic != MAGIC: raise ValueError("Invalid header or key")
-        return data[HEADER_SIZE:HEADER_SIZE+length]
+        if magic != MAGIC:
+            raise ValueError("Invalid header or key")
+        return data[HEADER_SIZE:HEADER_SIZE + length]
 
 stego_sys = StegoSystem()
 
 @app.get("/")
+@app.head("/")
 async def read_index():
     return FileResponse(BASE_DIR.parent / "frontend" / "index.html")
 
